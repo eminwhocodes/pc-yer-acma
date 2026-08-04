@@ -714,15 +714,38 @@ async function refresh() {
   return state;
 }
 
+const TAB_KEY = "pcYerAcma.activeTab";
+
+function activateTab(name, { persist = true } = {}) {
+  const tab = $(`.tab[data-tab="${name}"]`);
+  const panel = $(`#tab-${name}`);
+  if (!tab || !panel) return false;
+  $$(".tab").forEach((t) => t.classList.remove("active"));
+  $$(".panel").forEach((p) => p.classList.remove("active"));
+  tab.classList.add("active");
+  panel.classList.add("active");
+  if (persist) {
+    try {
+      localStorage.setItem(TAB_KEY, name);
+    } catch (_) {}
+  }
+  if (name === "docker") loadDocker();
+  return true;
+}
+
 $$(".tab").forEach((tab) => {
-  tab.addEventListener("click", () => {
-    $$(".tab").forEach((t) => t.classList.remove("active"));
-    $$(".panel").forEach((p) => p.classList.remove("active"));
-    tab.classList.add("active");
-    $(`#tab-${tab.dataset.tab}`).classList.add("active");
-    if (tab.dataset.tab === "docker") loadDocker();
-  });
+  tab.addEventListener("click", () => activateTab(tab.dataset.tab));
 });
+
+function restoreTab() {
+  let saved = "cats";
+  try {
+    saved = localStorage.getItem(TAB_KEY) || "cats";
+  } catch (_) {}
+  if (!activateTab(saved, { persist: false })) {
+    activateTab("cats", { persist: false });
+  }
+}
 
 $("#btnQuick").addEventListener("click", async () => {
   $("#btnQuick").disabled = true;
@@ -748,5 +771,6 @@ $("#btnProjects").addEventListener("click", async () => {
 $("#btnDocker").addEventListener("click", loadDocker);
 
 loadActions();
+restoreTab();
 refresh();
 setInterval(refresh, 1500);
