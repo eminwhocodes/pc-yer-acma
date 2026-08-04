@@ -205,7 +205,7 @@ th { color: var(--muted); font-weight: 600; }
   overflow: hidden;
   margin: 0.75rem 0;
 }
-#deepBar {
+#deepBar, #projBar {
   height: 100%;
   width: 0%;
   background: var(--accent-2);
@@ -269,7 +269,12 @@ dialog {
 }
 .dlg { padding: 1.1rem 1.2rem; }
 .dlg-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
-.clean-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
+.workspace-root { margin-bottom: 1.5rem; }
+.workspace-root h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+}
 
 .banner {
   border: 1px solid var(--line);

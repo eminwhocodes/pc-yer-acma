@@ -11,6 +11,12 @@ from typing import Any, Callable
 from .disk import dir_size, first_existing, get_disk_summary, measure_paths
 from .docker_scan import docker_daemon_status, docker_system_df
 from . import cache as scan_cache
+from .workspaces import (
+    export_workspaces_for_cache,
+    get_workspace_state,
+    hydrate_workspaces,
+    start_workspace_scan,
+)
 
 _lock = threading.Lock()
 _state: dict[str, Any] = {
@@ -50,6 +56,7 @@ def get_scan_state() -> dict[str, Any]:
         "disk": get_disk_summary(),
         "quick": quick,
         "deep": deep,
+        "workspaces": get_workspace_state(),
         "cache": {
             "age_seconds": age,
             "stale_after": scan_cache.STALE_AFTER,
@@ -533,6 +540,7 @@ def _persist_scans() -> None:
                 "progress": deep.get("progress", 0),
                 "status": deep.get("status"),
             },
+            "workspaces": export_workspaces_for_cache(),
         }
     )
 
@@ -574,6 +582,7 @@ def hydrate_from_cache() -> bool:
                     "cached_at": saved_at,
                 }
             )
+    hydrate_workspaces(data.get("workspaces"), saved_at)
     return bool(cats)
 
 
@@ -584,8 +593,12 @@ def bootstrap_scans(*, force: bool = False) -> dict[str, Any]:
     has_cache = hydrate_from_cache()
     data = scan_cache.load_cache()
     need = force or (not has_cache) or scan_cache.is_stale(data)
+    ws = get_workspace_state()
+    need_ws = force or not (ws.get("roots")) or scan_cache.is_stale(data)
     if need:
         quick_scan(background=True)
+    if need_ws:
+        start_workspace_scan(background=True)
     return get_scan_state()
 
 

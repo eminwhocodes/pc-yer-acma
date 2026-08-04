@@ -197,6 +197,77 @@ function renderDeep(state) {
     .join("");
 }
 
+function renderWorkspaces(state) {
+  const w = state.workspaces || {};
+  const bar = $("#projBar");
+  if (bar) bar.style.width = `${w.progress || 0}%`;
+  const st = $("#projStatus");
+  if (st) {
+    st.textContent =
+      w.status === "running"
+        ? `Taranıyor ${w.progress || 0}% — ${w.current || ""}`
+        : w.status === "done"
+          ? w.from_cache
+            ? "Önbellek · geliştirme alanları"
+            : "Tarama tamam"
+          : w.status === "error"
+            ? `Hata: ${w.error}`
+            : "Henüz taranmadı — Tara’ya bas";
+  }
+
+  const roots = w.roots || [];
+  const openIds = new Set($$("#projList .card.open").map((c) => c.dataset.id));
+  const max = Math.max(...roots.flatMap((r) => (r.projects || []).map((p) => p.bytes)), 1);
+
+  $("#projList").innerHTML = roots
+    .map((root) => {
+      const projects = root.projects || [];
+      const missing = root.missing
+        ? `<p class="note">Klasör yok: ${escapeHtml(root.path)}</p>`
+        : "";
+      const cards = projects
+        .map((p) => {
+          const pct = Math.round((p.bytes / max) * 100);
+          const id = escapeHtml(p.path);
+          const open = openIds.has(p.path) ? " open" : "";
+          const kids = (p.children || [])
+            .map(
+              (c) => `
+            <div class="item">
+              <div>
+                <div>${escapeHtml(c.label)}</div>
+                <div class="path">${escapeHtml(c.path)}</div>
+              </div>
+              <div class="size">${fmtBytes(c.bytes)}</div>
+            </div>`
+            )
+            .join("");
+          return `
+          <article class="card${open}" data-id="${id}">
+            <div class="card-head">
+              <strong>${escapeHtml(p.label)}</strong>
+              <span class="size">${fmtBytes(p.bytes)}</span>
+            </div>
+            <div class="bar-mini"><i style="width:${pct}%"></i></div>
+            <p class="note path">${escapeHtml(p.path)}</p>
+            <div class="items">${kids || "<em>Alt kırılım yok (küçük veya ölçülmedi)</em>"}</div>
+          </article>`;
+        })
+        .join("");
+      return `
+        <div class="workspace-root">
+          <h3>${escapeHtml(root.label)} · <span class="size">${fmtBytes(root.bytes || 0)}</span> · ${projects.length} öğe</h3>
+          ${missing}
+          <div class="cards">${cards || "<p class='hint'>Boş</p>"}</div>
+        </div>`;
+    })
+    .join("");
+
+  $$("#projList .card-head").forEach((el) => {
+    el.addEventListener("click", () => el.parentElement.classList.toggle("open"));
+  });
+}
+
 function treeNode(n, depth) {
   const kids = (n.children || []).map((c) => treeNode(c, depth + 1)).join("");
   return `
@@ -248,6 +319,23 @@ function renderDockIndex(state) {
       status: "error",
       detail: d.error || "hata",
       pct: null,
+    });
+  }
+
+  const w = state.workspaces || {};
+  if (w.status === "running") {
+    items.push({
+      title: "Geliştirme alanları (www)",
+      status: "running",
+      detail: w.current || "taranıyor…",
+      pct: w.progress || 0,
+    });
+  } else if (w.status === "done" && (w.roots || []).length) {
+    items.push({
+      title: "Geliştirme alanları (www)",
+      status: "done",
+      detail: (w.roots || []).map((r) => r.label).join(" · "),
+      pct: 100,
     });
   }
 
@@ -620,6 +708,7 @@ async function refresh() {
   renderAdmin(!!state.admin);
   renderCategories(state);
   renderDeep(state);
+  renderWorkspaces(state);
   renderDockIndex(state);
   renderDockJobs(state.queue);
   return state;
@@ -647,6 +736,13 @@ $("#btnDeep").addEventListener("click", async () => {
   await api("/api/scan/deep");
   setDockTab("index");
   setTimeout(() => ($("#btnDeep").disabled = false), 1500);
+});
+
+$("#btnProjects").addEventListener("click", async () => {
+  $("#btnProjects").disabled = true;
+  await api("/api/scan/workspaces");
+  setDockTab("index");
+  setTimeout(() => ($("#btnProjects").disabled = false), 1500);
 });
 
 $("#btnDocker").addEventListener("click", loadDocker);

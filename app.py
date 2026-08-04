@@ -31,6 +31,7 @@ from scanner import (  # noqa: E402
     get_scan_state,
     quick_scan,
     start_deep_scan,
+    start_workspace_scan,
 )
 from scanner.categories import bootstrap_scans  # noqa: E402
 from scanner.docker_scan import docker_daemon_status  # noqa: E402
@@ -165,6 +166,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(quick_scan(background=True))
         if path == "/api/scan/deep":
             return self._json(start_deep_scan(background=True))
+        if path == "/api/scan/workspaces":
+            return self._json({"workspaces": start_workspace_scan(background=True)})
         if path == "/api/docker":
             from urllib.parse import parse_qs
 

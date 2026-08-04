@@ -20,6 +20,7 @@
 
   <nav class="tabs">
     <button class="tab active" data-tab="cats">Kategoriler</button>
+    <button class="tab" data-tab="projects">Projeler</button>
     <button class="tab" data-tab="docker">Docker</button>
     <button class="tab" data-tab="deep">Derin tarama</button>
     <button class="tab" data-tab="clean">Temizlik</button>
@@ -35,6 +36,17 @@
       <div id="dockerWarnGlobal" class="banner warn hidden"></div>
       <p class="hint" id="quickStatus">Yükleniyor…</p>
       <div id="catList" class="cards"></div>
+    </section>
+
+    <section id="tab-projects" class="panel">
+      <div class="row">
+        <h2>Geliştirme alanları</h2>
+        <button id="btnProjects" class="btn">Tara</button>
+      </div>
+      <p class="hint">c:\www ve C:\wamp64\www — proje / klasör boyutları. Büyüklerde node_modules, vendor, .git vb. kırılım.</p>
+      <div class="progress"><div id="projBar"></div></div>
+      <p id="projStatus" class="hint"></p>
+      <div id="projList" class="cards"></div>
     </section>
 
     <section id="tab-docker" class="panel">

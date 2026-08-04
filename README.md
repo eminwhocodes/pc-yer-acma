@@ -13,7 +13,7 @@ Windows diskim doluyordu; neyin ne kadar yer tuttuğunu tek bakışta görmek is
 - Temp, Windows Update, AppData büyükleri
 - İstersen C:\ derin tarama
 
-Amacım hazır “disk cleaner” kullanmak değil; **kendime göre bir panel** kurup Docker ne kadar, Drive yedekleri ne kadar, update ne kadar diye kategori kategori görmekti.
+Amacım hazır “disk cleaner” kullanmak değil; **kendime göre bir panel** kurup Docker ne kadar, Drive yedekleri ne kadar, update ne kadar diye kategori kategori görmekti. Ayrıca `c:\www` ve `C:\wamp64\www` altındaki kendi projelerimin boyutunu da buradan takip ediyorum.
 
 ## Kullanım
 
