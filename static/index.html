@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PC Yer Açma</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="top">
+    <div>
+      <p class="brand">PC Yer Açma <span id="adminBadge" class="admin-badge">…</span></p>
+      <p class="sub">Kategori tarama · Docker CLI temizlik · Derin C: analizi</p>
+    </div>
+    <div class="disk" id="diskBox">
+      <div class="disk-bar"><div class="disk-fill" id="diskFill"></div></div>
+      <p id="diskText">Disk ölçülüyor…</p>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="cats">Kategoriler</button>
+    <button class="tab" data-tab="docker">Docker</button>
+    <button class="tab" data-tab="deep">Derin tarama</button>
+    <button class="tab" data-tab="clean">Temizlik</button>
+  </nav>
+
+  <main>
+    <section id="tab-cats" class="panel active">
+      <div class="row">
+        <h2>Hızlı kategoriler</h2>
+        <button id="btnQuick" class="btn">Yeniden tara</button>
+      </div>
+      <div id="cacheBanner" class="banner hidden"></div>
+      <div id="dockerWarnGlobal" class="banner warn hidden"></div>
+      <p class="hint" id="quickStatus">Yükleniyor…</p>
+      <div id="catList" class="cards"></div>
+    </section>
+
+    <section id="tab-docker" class="panel">
+      <div class="row">
+        <h2>Docker</h2>
+        <button id="btnDocker" class="btn">Yenile</button>
+      </div>
+      <div id="dockerBanner" class="banner warn hidden"></div>
+      <div id="dockerGap" class="banner hidden"></div>
+      <div id="dockerSummary" class="hint"></div>
+      <div class="split">
+        <div>
+          <h3>Türler</h3>
+          <div id="dockerTypes"></div>
+        </div>
+        <div>
+          <h3>Image'ler</h3>
+          <div id="dockerImages" class="table-wrap"></div>
+        </div>
+      </div>
+      <div class="clean-row" id="dockerActions"></div>
+    </section>
+
+    <section id="tab-deep" class="panel">
+      <div class="row">
+        <h2>C:\ derin tarama</h2>
+        <button id="btnDeep" class="btn">Başlat</button>
+      </div>
+      <p class="hint">Üst düzey klasörler + büyük alt ağaçlar. Uzun sürebilir.</p>
+      <div class="progress"><div id="deepBar"></div></div>
+      <p id="deepStatus" class="hint"></p>
+      <div id="deepTree" class="tree"></div>
+    </section>
+
+    <section id="tab-clean" class="panel">
+      <h2>Güvenli temizlik</h2>
+      <p class="hint">Orta riskli aksiyonlar ekstra onay ister. Emülatör / Drive silinmez.</p>
+      <div id="actionList" class="actions"></div>
+      <pre id="cleanLog" class="log"></pre>
+    </section>
+  </main>
+
+  <dialog id="confirmDlg">
+    <div class="dlg">
+      <h3 id="dlgTitle">Onay</h3>
+      <p id="dlgBody"></p>
+      <div class="dlg-actions">
+        <button type="button" class="btn ghost" id="dlgCancel">İptal</button>
+        <button type="button" class="btn danger" id="dlgOk">Sıraya al</button>
+      </div>
+    </div>
+  </dialog>
+
+  <aside id="dock" class="dock" aria-label="Durum paneli">
+    <div class="dock-head">
+      <div class="dock-tabs">
+        <button type="button" class="dock-tab active" data-dock="index">Dizin</button>
+        <button type="button" class="dock-tab" data-dock="jobs">İşlemler <span id="jobBadge" class="dock-badge hidden">0</span></button>
+      </div>
+      <button type="button" id="dockToggle" class="dock-min" title="Küçült">−</button>
+    </div>
+    <div class="dock-body">
+      <div id="dock-index" class="dock-panel active">
+        <p class="dock-empty" id="indexEmpty">Aktif dizin taraması yok</p>
+        <div id="indexList"></div>
+      </div>
+      <div id="dock-jobs" class="dock-panel">
+        <div class="dock-tools">
+          <button type="button" id="btnClearJobs" class="btn ghost tiny">Bitmişleri temizle</button>
+        </div>
+        <p class="dock-empty" id="jobsEmpty">Sırada işlem yok</p>
+        <div id="jobsList"></div>
+      </div>
+    </div>
+  </aside>
+
+  <script src="/app.js"></script>
+</body>
+</html>
