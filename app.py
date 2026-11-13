@@ -39,8 +39,8 @@ from scanner.files import (  # noqa: E402
     default_roots,
     get_files_state,
     reveal_path,
+    enqueue_trash,
     start_files_scan,
-    trash_paths,
 )
 from scanner.docker_scan import docker_daemon_status  # noqa: E402
 from applog import log  # noqa: E402
@@ -266,9 +266,7 @@ class Handler(SimpleHTTPRequestHandler):
                     return self._json({"ok": False, "error": "confirm: true gerekli"}, 400)
                 if not isinstance(paths, list) or not paths:
                     return self._json({"ok": False, "error": "paths gerekli"}, 400)
-                res = trash_paths([str(x) for x in paths])
-                log("files_trash", count=len(res["trashed"]), failed=len(res["failed"]), paths=res["trashed"])
-                return self._json(res)
+                return self._json(enqueue_trash([str(x) for x in paths]))
             return self._json({"ok": False, "error": "not found"}, 404)
         if path == "/api/queue/cancel":
             payload = self._read_json()

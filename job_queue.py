@@ -55,9 +55,13 @@ def _worker_loop() -> None:
             continue
         log("job_running", job_id=job["id"], action=job["action"])
         try:
-            result = run_action(job["action"])
+            fn = job.get("fn")
+            result = fn(job) if fn else run_action(job["action"])
             with _lock:
-                job["status"] = "done" if result.get("ok") else "error"
+                if job.get("cancel_requested") and result.get("cancelled"):
+                    job["status"] = "cancelled"
+                else:
+                    job["status"] = "done" if result.get("ok") else "error"
                 job["finished_at"] = time.time()
                 job["result"] = result
                 job["summary"] = _summarize_result(result)
@@ -129,6 +133,40 @@ def enqueue(action_id: str) -> dict[str, Any]:
     return {"ok": True, "queued": True, "duplicate": False, "job": job, "queue": get_queue()}
 
 
+def enqueue_task(action: str, title: str, fn: Callable[[dict[str, Any]], dict[str, Any]], risk: str = "low") -> dict[str, Any]:
+    """Fonksiyonla çalışan iş. fn(job) ilerlemeyi update_job ile bildirir,
+    job["cancel_requested"] doğruysa erken döner ({"cancelled": True})."""
+    job = {
+        "id": str(uuid.uuid4())[:8],
+        "action": action,
+        "title": title,
+        "risk": risk,
+        "status": "queued",
+        "created_at": time.time(),
+        "started_at": None,
+        "finished_at": None,
+        "error": None,
+        "result": None,
+        "summary": None,
+        "freed_bytes": None,
+        "progress": 0,
+        "detail": None,
+        "cancellable": True,
+        "fn": fn,
+    }
+    with _cv:
+        _jobs.append(job)
+        _ensure_worker()
+        _cv.notify_all()
+    log("job_queued", job_id=job["id"], action=action)
+    return {"ok": True, "job": _slim(job)}
+
+
+def update_job(job: dict[str, Any], **kw: Any) -> None:
+    with _lock:
+        job.update(kw)
+
+
 def cancel_job(job_id: str) -> dict[str, Any]:
     with _lock:
         for j in _jobs:
@@ -136,7 +174,11 @@ def cancel_job(job_id: str) -> dict[str, Any]:
                 j["status"] = "cancelled"
                 j["finished_at"] = time.time()
                 log("job_cancelled", job_id=job_id)
-                return {"ok": True, "job": j}
+                return {"ok": True, "job": _slim(j)}
+            if j["id"] == job_id and j["status"] == "running" and j.get("cancellable"):
+                j["cancel_requested"] = True
+                log("job_cancel_requested", job_id=job_id)
+                return {"ok": True, "job": _slim(j)}
     return {"ok": False, "error": "İptal edilemedi (sadece sıradakiler)"}
 
 
@@ -147,12 +189,16 @@ def clear_finished() -> dict[str, Any]:
     return {"ok": True, "queue": get_queue()}
 
 
+def _slim(j: dict[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in j.items() if k not in ("result", "fn")}
+
+
 def get_queue() -> dict[str, Any]:
     with _lock:
         jobs = [dict(j) for j in _jobs]
     slim = []
     for j in jobs:
-        item = {k: v for k, v in j.items() if k != "result"}
+        item = _slim(j)
         if j.get("result") is not None:
             item["has_result"] = True
             item["result_ok"] = bool(j["result"].get("ok"))
@@ -171,5 +217,5 @@ def get_job(job_id: str) -> dict[str, Any] | None:
     with _lock:
         for j in _jobs:
             if j["id"] == job_id:
-                return dict(j)
+                return {k: v for k, v in j.items() if k != "fn"}
     return None

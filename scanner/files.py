@@ -7,7 +7,7 @@
   indirmeler, uzun süredir dokunulmamış indirmeler, "Kopya"/"(1)" adlılar.
 - Bulutta duran (indirilmemiş) OneDrive/Drive dosyaları okunmaz; okumak onları indirir.
 
-Silme yok: yalnız Geri Dönüşüm Kutusu'na taşıma (bkz. trash_paths).
+Silme yok: yalnız Geri Dönüşüm Kutusu'na taşıma (bkz. enqueue_trash).
 """
 from __future__ import annotations
 
@@ -135,6 +135,7 @@ _state: dict[str, Any] = {
     "folder_dups": [],
     "junk": [],
     "trashed": [],
+    "rev": 0,
 }
 _known_paths: set[str] = set()
 
@@ -148,7 +149,7 @@ def get_files_state(full: bool = True) -> dict[str, Any]:
     with _lock:
         if full:
             return json.loads(json.dumps(_state, default=str))
-        return {k: _state[k] for k in ("status", "phase", "progress", "current", "started", "finished", "error")}
+        return {k: _state.get(k) for k in ("status", "phase", "progress", "current", "started", "finished", "error", "rev")}
 
 
 def _load_saved() -> None:
@@ -673,6 +674,7 @@ def _run(roots: list[dict]) -> None:
             folder_dups=fdups[:MAX_LIST],
             junk=junk_rows,
             trashed=[],
+            rev=(_state.get("rev") or 0) + 1,
         )
         _rebuild_known()
         _save()
@@ -738,49 +740,217 @@ def _recycle(path: str) -> bool:
     return rc == 0 and not op.fAnyOperationsAborted and not os.path.exists(path)
 
 
-def trash_paths(paths: list[str]) -> dict[str, Any]:
-    """Yalnız son taramada listelenen dosyaları Geri Dönüşüm Kutusu'na taşır."""
-    done, failed = [], []
+def _recycle_limits(path: str) -> tuple[bool, int | None]:
+    """(kalıcı_silme_açık, kutu_kapasitesi_bayt) — bilinmiyorsa (False, None)."""
+    try:
+        import winreg
+
+        drive = os.path.splitdrive(path)[0] + "\\"
+        buf = ctypes.create_unicode_buffer(100)
+        if not ctypes.windll.kernel32.GetVolumeNameForVolumeMountPointW(drive, buf, 100):
+            return False, None
+        guid = buf.value.split("Volume", 1)[1].strip("\\")  # {....}
+        key = rf"Software\Microsoft\Windows\CurrentVersion\Explorer\BitBucket\Volume\{guid}"
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key) as k:
+            def val(name: str) -> int | None:
+                try:
+                    return int(winreg.QueryValueEx(k, name)[0])
+                except OSError:
+                    return None
+
+            nuke = val("NukeOnDelete") == 1
+            cap = val("MaxCapacity")
+            return nuke, (cap * 1024 * 1024 if cap else None)
+    except Exception:
+        return False, None
+
+
+def _item_sizes() -> dict[str, int]:
+    sizes: dict[str, int] = {}
+    with _lock:
+        for r in _state["big"] + _state["junk"]:
+            sizes[r["path"].lower()] = r["size"]
+        for g in _state["duplicates"]:
+            for f in g["files"]:
+                sizes[f["path"].lower()] = f["size"]
+        for g in _state.get("folder_dups") or []:
+            for f in g["folders"]:
+                sizes[f["path"].lower()] = f["size"]
+    return sizes
+
+
+def _under(low: str, folders: tuple[str, ...]) -> bool:
+    return low.startswith(folders)
+
+
+def plan_trash(paths: list[str]) -> tuple[list[dict], list[dict]]:
+    """Seçimi doğrular: (taşınacaklar, reddedilenler).
+
+    - yalnız son taramada listelenen ve hâlâ var olan yollar,
+    - seçili bir klasörün içindeki seçimler tekilleştirilir (klasörle birlikte gider),
+    - bir kopya grubunun bütün üyelerini götürecek seçim reddedilir (son kopya korunur),
+    - Geri Dönüşüm Kutusu kapalıysa ya da öğe kutuya sığmıyorsa reddedilir (kalıcı silinirdi).
+    """
+    sizes = _item_sizes()
+    rejected: list[dict] = []
+    chosen: dict[str, str] = {}
     for p in paths:
         p = str(p)
-        if p.lower() not in _known_paths:
-            failed.append({"path": p, "error": "Taramada yok"})
-            continue
-        if not os.path.exists(p):
-            failed.append({"path": p, "error": "Bulunamadı"})
-            continue
-        if _recycle(p):
-            done.append(p)
+        low = p.lower()
+        if low not in _known_paths:
+            rejected.append({"path": p, "error": "Son taramada yok"})
+        elif not os.path.exists(p):
+            rejected.append({"path": p, "error": "Bulunamadı (zaten taşınmış olabilir)"})
         else:
-            failed.append({"path": p, "error": "Taşınamadı (açık ya da izin yok)"})
-    if done:
-        gone_set = {d.lower() for d in done}
-        gone_pref = tuple(d.rstrip("\\") + "\\" for d in gone_set)
+            chosen[low] = p
 
-        class _Gone:
-            def __contains__(self, low: str) -> bool:
-                return low in gone_set or low.startswith(gone_pref)
+    # Son kopya koruması: grup üyelerinin hepsi gidiyorsa "tut" üyesini kurtar
+    with _lock:
+        groups = [[f for f in g["folders"]] for g in _state.get("folder_dups") or []]
+        groups += [[f for f in g["files"]] for g in _state["duplicates"]]
+    changed = True
+    while changed:
+        changed = False
+        sel_dirs = tuple(c.rstrip("\\") + "\\" for c in chosen)
+        for members in groups:
+            lows = [m["path"].lower() for m in members]
+            if not all(lw in chosen or _under(lw, sel_dirs) for lw in lows):
+                continue
+            keep = next((m for m in members if m.get("keep")), members[0])["path"].lower()
+            # tut üyesini götüren seçimleri (kendisi ya da üst klasörü) bırak
+            for c in list(chosen):
+                if keep == c or keep.startswith(c.rstrip("\\") + "\\"):
+                    rejected.append({"path": chosen.pop(c), "error": "Grubun son kopyası; en az biri kalmalı"})
+                    changed = True
+            if changed:
+                break
 
-        gone = _Gone()
-        with _lock:
-            _state["big"] = [r for r in _state["big"] if r["path"].lower() not in gone]
-            _state["junk"] = [r for r in _state["junk"] if r["path"].lower() not in gone]
-            groups = []
-            for g in _state["duplicates"]:
-                files = [f for f in g["files"] if f["path"].lower() not in gone]
-                if len(files) >= 2:
-                    g = {**g, "files": files, "count": len(files), "wasted": g["size"] * (len(files) - 1)}
-                    groups.append(g)
-            _state["duplicates"] = groups
-            fgroups = []
-            for g in _state.get("folder_dups") or []:
-                rows = [f for f in g["folders"] if f["path"].lower() not in gone]
-                if len(rows) >= 2:
-                    fgroups.append({**g, "folders": rows, "count": len(rows), "wasted": g["size"] * (len(rows) - 1)})
-            _state["folder_dups"] = fgroups
-            _state["trashed"] = (_state.get("trashed") or []) + done
-        _save()
-    return {"ok": not failed, "trashed": done, "failed": failed}
+    # İç içe seçimleri tekle
+    order = sorted(chosen, key=len)
+    tops: list[str] = []
+    for c in order:
+        if not any(c.startswith(t.rstrip("\\") + "\\") for t in tops):
+            tops.append(c)
+
+    nuke, cap = _recycle_limits(next(iter(chosen.values()), "C:\\"))
+    items: list[dict] = []
+    for c in tops:
+        p = chosen[c]
+        size = sizes.get(c, 0)
+        if nuke:
+            rejected.append({"path": p, "error": "Geri Dönüşüm Kutusu kapalı (kalıcı silinirdi)"})
+        elif cap and size > cap * 0.9:
+            rejected.append({"path": p, "error": "Geri Dönüşüm Kutusu'na sığmaz (kalıcı silinirdi)"})
+        else:
+            items.append({"path": p, "size": size})
+    return items, rejected
+
+
+def _apply_trashed(done: list[str]) -> None:
+    if not done:
+        return
+    gone_set = {d.lower() for d in done}
+    gone_pref = tuple(d.rstrip("\\") + "\\" for d in gone_set)
+
+    def gone(low: str) -> bool:
+        return low in gone_set or low.startswith(gone_pref)
+
+    with _lock:
+        _state["big"] = [r for r in _state["big"] if not gone(r["path"].lower())]
+        _state["junk"] = [r for r in _state["junk"] if not gone(r["path"].lower())]
+        groups = []
+        for g in _state["duplicates"]:
+            files = [f for f in g["files"] if not gone(f["path"].lower())]
+            if len(files) >= 2:
+                groups.append({**g, "files": files, "count": len(files), "wasted": g["size"] * (len(files) - 1)})
+        _state["duplicates"] = groups
+        fgroups = []
+        for g in _state.get("folder_dups") or []:
+            # Üyelerinden birinin içinden bir şey taşındıysa içerik değişti: grup artık geçersiz
+            inner = tuple(f["path"].lower().rstrip("\\") + "\\" for f in g["folders"])
+            if any(d.startswith(inner) for d in gone_set):
+                continue
+            rows = [f for f in g["folders"] if not gone(f["path"].lower())]
+            if len(rows) >= 2:
+                fgroups.append({**g, "folders": rows, "count": len(rows), "wasted": g["size"] * (len(rows) - 1)})
+        _state["folder_dups"] = fgroups
+        _state["trashed"] = (_state.get("trashed") or []) + done
+        _state["rev"] = (_state.get("rev") or 0) + 1
+    _save()
+
+
+def _fmt_short(n: float) -> str:
+    if n >= 1024**3:
+        return f"{n / 1024**3:.1f} GB"
+    return f"{n / 1024**2:.0f} MB"
+
+
+def enqueue_trash(paths: list[str]) -> dict[str, Any]:
+    """Seçimi doğrular ve taşımayı arka plan işi olarak sıraya alır."""
+    from job_queue import enqueue_task, update_job
+
+    items, rejected = plan_trash(paths)
+    if not items:
+        return {"ok": False, "error": "Taşınacak öğe kalmadı", "rejected": rejected}
+    total_bytes = sum(i["size"] for i in items)
+
+    def work(job: dict) -> dict[str, Any]:
+        done: list[str] = []
+        failed: list[dict] = []
+        moved = 0
+        batch: list[str] = []
+        for n, it in enumerate(items, 1):
+            if job.get("cancel_requested"):
+                break
+            name = os.path.basename(it["path"].rstrip("\\"))
+            update_job(
+                job,
+                progress=int((n - 1) / len(items) * 100),
+                detail=f"{n}/{len(items)} · {_fmt_short(moved)} / {_fmt_short(total_bytes)} · {name}",
+            )
+            if not os.path.exists(it["path"]):
+                failed.append({"path": it["path"], "error": "Bulunamadı"})
+                continue
+            if _recycle(it["path"]):
+                done.append(it["path"])
+                batch.append(it["path"])
+                moved += it["size"]
+            else:
+                failed.append({"path": it["path"], "error": "Taşınamadı (açık ya da izin yok)"})
+            # Listeler taşıdıkça güncellensin (her 5 öğede bir)
+            if len(batch) >= 5:
+                _apply_trashed(batch)
+                batch = []
+        _apply_trashed(batch)
+        cancelled = bool(job.get("cancel_requested"))
+        summary = f"{len(done)} öğe · ~{_fmt_short(moved)} Geri Dönüşüm Kutusu'na taşındı"
+        if failed:
+            summary += f" · {len(failed)} taşınamadı"
+        if cancelled:
+            summary += " · durduruldu"
+        update_job(job, progress=100, detail=summary)
+        log_paths(done, failed)
+        return {
+            "ok": not failed,
+            "cancelled": cancelled,
+            "note": summary,
+            "error": "; ".join(f"{os.path.basename(f['path'])}: {f['error']}" for f in failed[:5]) or None,
+            "trashed": done,
+            "failed": failed,
+        }
+
+    title = f"Geri Dönüşüm Kutusu'na taşı · {len(items)} öğe · {_fmt_short(total_bytes)}"
+    res = enqueue_task("files_trash", title, work)
+    return {"ok": True, "job": res["job"], "count": len(items), "bytes": total_bytes, "rejected": rejected}
+
+
+def log_paths(done: list[str], failed: list[dict]) -> None:
+    try:
+        from applog import log
+
+        log("files_trash", count=len(done), failed=len(failed), paths=done, errors=failed[:20])
+    except Exception:
+        pass
 
 
 def reveal_path(path: str) -> dict[str, Any]:

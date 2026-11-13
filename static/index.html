@@ -47,7 +47,7 @@
           <button id="btnFilesScan" class="btn">Tara</button>
         </div>
       </div>
-      <p class="hint">Kopyalar içerikten bulunur, adları farklı olsa da. Bulutta duran (indirilmemiş) dosyalar okunmaz. Silme yok: seçtiklerin Geri Dönüşüm Kutusu'na gider.</p>
+      <p class="hint">Kopyalar içerikten bulunur, adları farklı olsa da. Bulutta duran (indirilmemiş) dosyalar okunmaz. Silme yok: seçtiklerin Geri Dönüşüm Kutusu'na gider. Satıra tıkla ya da Shift ile aralık seç; grup başlığı o gruptaki fazlalıkların hepsini seçer.</p>
       <details class="roots-box" id="filesRootsBox">
         <summary>Taranacak klasörler <span id="filesRootsSummary" class="muted"></span></summary>
         <div id="filesRoots" class="roots"></div>
@@ -57,6 +57,7 @@
       </details>
       <div class="progress"><div id="filesBar"></div></div>
       <p id="filesStatus" class="hint"></p>
+      <div id="filesNotice" class="banner hidden"></div>
       <div id="filesStats" class="stat-tiles"></div>
       <nav class="subtabs" id="filesSubtabs">
         <button type="button" class="subtab active" data-sub="fdups">Kopya klasörler <span id="cntFdups"></span></button>

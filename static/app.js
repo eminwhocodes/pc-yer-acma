@@ -387,7 +387,16 @@ function renderDockJobs(queue) {
       const cancelBtn =
         j.status === "queued"
           ? `<div class="row-actions"><button type="button" class="btn ghost tiny" data-cancel="${j.id}">Sıradan çıkar</button></div>`
+          : j.status === "running" && j.cancellable && !j.cancel_requested
+            ? `<div class="row-actions"><button type="button" class="btn ghost tiny" data-cancel="${j.id}">Durdur</button></div>`
+            : j.cancel_requested && j.status === "running"
+              ? `<div class="path">Durduruluyor… (sıradaki öğeden önce)</div>`
+              : "";
+      const prog =
+        j.status === "running" && j.progress != null
+          ? `<div class="job-bar"><i style="width:${Math.max(2, j.progress)}%"></i></div>`
           : "";
+      const detail = j.detail ? `<div class="path">${escapeHtml(j.detail).replace(/[\u200b-\u200f\u202a-\u202e\u2066-\u2069]+/g, "‹görünmez›")}</div>` : "";
       const err = j.error ? `<div class="path">${escapeHtml(j.error)}</div>` : "";
       const sum = j.summary ? `<div class="path">${escapeHtml(j.summary)}</div>` : "";
       return `
@@ -397,7 +406,9 @@ function renderDockJobs(queue) {
           <span class="st ${j.status}">${j.status}</span>
         </div>
         <div class="path">#${escapeHtml(j.id)} · ${escapeHtml(j.action)}</div>
-        ${sum}
+        ${prog}
+        ${detail}
+        ${j.detail ? "" : sum}
         ${err}
         ${cancelBtn}
       </div>`;
