@@ -20,6 +20,7 @@
 
   <nav class="tabs">
     <button class="tab active" data-tab="cats">Kategoriler</button>
+    <button class="tab" data-tab="files">Dosyalar</button>
     <button class="tab" data-tab="projects">Projeler</button>
     <button class="tab" data-tab="docker">Docker</button>
     <button class="tab" data-tab="deep">Derin tarama</button>
@@ -36,6 +37,43 @@
       <div id="dockerWarnGlobal" class="banner warn hidden"></div>
       <p class="hint" id="quickStatus">Yükleniyor…</p>
       <div id="catList" class="cards"></div>
+    </section>
+
+    <section id="tab-files" class="panel">
+      <div class="row">
+        <h2>Büyük, gereksiz ve kopya dosyalar</h2>
+        <div class="row-actions">
+          <button id="btnFilesCancel" class="btn ghost hidden">Durdur</button>
+          <button id="btnFilesScan" class="btn">Tara</button>
+        </div>
+      </div>
+      <p class="hint">Kopyalar içerikten bulunur, adları farklı olsa da. Bulutta duran (indirilmemiş) dosyalar okunmaz. Silme yok: seçtiklerin Geri Dönüşüm Kutusu'na gider.</p>
+      <details class="roots-box" id="filesRootsBox">
+        <summary>Taranacak klasörler <span id="filesRootsSummary" class="muted"></span></summary>
+        <div id="filesRoots" class="roots"></div>
+        <label class="extra">Ek klasörler (her satıra bir tam yol)
+          <textarea id="filesExtra" rows="2" placeholder="C:\www\eski-projeler"></textarea>
+        </label>
+      </details>
+      <div class="progress"><div id="filesBar"></div></div>
+      <p id="filesStatus" class="hint"></p>
+      <div id="filesStats" class="stat-tiles"></div>
+      <nav class="subtabs" id="filesSubtabs">
+        <button type="button" class="subtab active" data-sub="fdups">Kopya klasörler <span id="cntFdups"></span></button>
+        <button type="button" class="subtab" data-sub="dups">Kopya dosyalar <span id="cntDups"></span></button>
+        <button type="button" class="subtab" data-sub="big">Büyük <span id="cntBig"></span></button>
+        <button type="button" class="subtab" data-sub="junk">Gereksiz olabilir <span id="cntJunk"></span></button>
+      </nav>
+      <div class="sub-tools">
+        <input type="search" id="filesFilter" placeholder="Ad ya da klasörde ara" />
+        <button type="button" class="btn ghost tiny" id="btnSelSuggested">Önerilenleri seç</button>
+        <button type="button" class="btn ghost tiny" id="btnSelNone">Seçimi temizle</button>
+      </div>
+      <div id="filesList"></div>
+      <div id="filesSelBar" class="sel-bar hidden">
+        <span id="filesSelText"></span>
+        <button type="button" class="btn danger" id="btnFilesTrash">Geri Dönüşüm Kutusu'na taşı</button>
+      </div>
     </section>
 
     <section id="tab-projects" class="panel">
@@ -123,6 +161,19 @@
     </div>
   </aside>
 
+  <dialog id="trashDlg">
+    <div class="dlg">
+      <h3 id="trashTitle">Geri Dönüşüm Kutusu'na taşı</h3>
+      <p id="trashBody"></p>
+      <ul id="trashList" class="trash-list"></ul>
+      <div class="dlg-actions">
+        <button type="button" class="btn ghost" id="trashCancel">Vazgeç</button>
+        <button type="button" class="btn danger" id="trashOk">Taşı</button>
+      </div>
+    </div>
+  </dialog>
+
   <script src="/app.js"></script>
+  <script src="/files.js"></script>
 </body>
 </html>

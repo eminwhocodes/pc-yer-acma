@@ -34,6 +34,14 @@ from scanner import (  # noqa: E402
     start_workspace_scan,
 )
 from scanner.categories import bootstrap_scans  # noqa: E402
+from scanner.files import (  # noqa: E402
+    cancel_files_scan,
+    default_roots,
+    get_files_state,
+    reveal_path,
+    start_files_scan,
+    trash_paths,
+)
 from scanner.docker_scan import docker_daemon_status  # noqa: E402
 from applog import log  # noqa: E402
 import datetime as _dt  # noqa: E402
@@ -174,6 +182,12 @@ class Handler(SimpleHTTPRequestHandler):
             qs = parse_qs(urlparse(self.path).query)
             fresh = (qs.get("fresh") or ["0"])[0] in ("1", "true", "yes")
             return self._json(docker_details(fresh=fresh))
+        if path == "/api/files":
+            return self._json(get_files_state(full=True))
+        if path == "/api/files/status":
+            return self._json(get_files_state(full=False))
+        if path == "/api/files/roots":
+            return self._json({"roots": default_roots()})
         if path == "/api/actions":
             return self._json({"actions": list_actions(), "admin": is_admin()})
         if path == "/api/scan/bootstrap":
@@ -231,6 +245,31 @@ class Handler(SimpleHTTPRequestHandler):
             if not confirm:
                 return self._json({"ok": False, "error": "confirm: true gerekli"}, 400)
             return self._json(enqueue(action))
+        if path.startswith("/api/files/"):
+            # Başka sitelerin form/no-cors isteklerini reddet (JSON ön kontrol ister)
+            ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+            if ctype != "application/json":
+                return self._json({"ok": False, "error": "application/json gerekli"}, 415)
+            payload = self._read_json()
+            if path == "/api/files/scan":
+                roots = payload.get("roots")
+                if roots is not None and not isinstance(roots, list):
+                    return self._json({"ok": False, "error": "roots liste olmalı"}, 400)
+                return self._json(start_files_scan(roots, background=True))
+            if path == "/api/files/cancel":
+                return self._json(cancel_files_scan())
+            if path == "/api/files/reveal":
+                return self._json(reveal_path(str(payload.get("path", ""))))
+            if path == "/api/files/trash":
+                paths = payload.get("paths")
+                if not payload.get("confirm"):
+                    return self._json({"ok": False, "error": "confirm: true gerekli"}, 400)
+                if not isinstance(paths, list) or not paths:
+                    return self._json({"ok": False, "error": "paths gerekli"}, 400)
+                res = trash_paths([str(x) for x in paths])
+                log("files_trash", count=len(res["trashed"]), failed=len(res["failed"]), paths=res["trashed"])
+                return self._json(res)
+            return self._json({"ok": False, "error": "not found"}, 404)
         if path == "/api/queue/cancel":
             payload = self._read_json()
             return self._json(cancel_job(str(payload.get("id", ""))))

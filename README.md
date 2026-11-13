@@ -38,6 +38,13 @@ Sistem tray’den tarayıcı / konsol / çıkış.
 - Docker: `docker system df`, image listesi, prune kuyruğu, VHDX (disk) vs engine farkı
 - Güvenli temizlik kuyruğu (temp, recycle, docker prune, VHDX küçült…)
 - Drive / OneDrive çevrimdışı-cache kırılımı
+- **Dosyalar** sekmesi: Masaüstü, İndirilenler, Belgeler, Resimler, Videolar, Müzik (+ istenen ek klasörler) için
+  - kopya klasörler (alt ağacın ad + boyut + içerik imzası aynı olanlar),
+  - kopya dosyalar (adı farklı olsa da içerik aynı: boyut → baş/son 64 KB → tam BLAKE2b hash; hash önbelleği `data/hash_cache.json`),
+  - 100 MB üstü dosyalar,
+  - gereksiz olabilecekler (kurulum dosyaları, açılmış/eski arşivler, yarım indirmeler, eski indirmeler, "Kopya"/"(1)" adlılar).
+  Her grupta tutulacak olan önerilir; seçilenler yalnız **Geri Dönüşüm Kutusu'na** taşınır (kalıcı silme yok). Bulutta duran (indirilmemiş) dosyalar okunmaz.
+  Komut satırından: `python -m scanner.files [klasör ...] --json sonuc.json`
 - Loglar: `logs/` (7 günden eski otomatik silinir)
 
 ## Lisans / kullanım
